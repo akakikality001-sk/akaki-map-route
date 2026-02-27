@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Addis Ababa · Live Location Tracker</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        body {
+            background: #1a202c;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: white;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        
+        .header h1 {
+            color: #2d3748;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .header h1 i {
+            color: #4299e1;
+        }
+        
+        .status-bar {
+            background: #4299e1;
+            color: white;
+            padding: 8px;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        #map {
+            flex: 1;
+            width: 100%;
+            z-index: 1;
+        }
+        
+        .info-panel {
+            background: white;
+            padding: 15px;
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        
+        .coordinates {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .coord-box {
+            background: #f7fafc;
+            padding: 10px 20px;
+            border-radius: 30px;
+            border: 2px solid #e2e8f0;
+            text-align: center;
+            min-width: 180px;
+        }
+        
+        .coord-box .label {
+            color: #718096;
+            font-size: 0.8rem;
+            margin-bottom: 5px;
+        }
+        
+        .coord-box .value {
+            color: #2d3748;
+            font-size: 1.1rem;
+            font-weight: 600;
+            font-family: monospace;
+        }
+        
+        .accuracy-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #ebf8ff;
+            padding: 10px 20px;
+            border-radius: 30px;
+            border: 2px solid #4299e1;
+        }
+        
+        .accuracy-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #48bb78;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.1); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        
+        .accuracy-dot.excellent { background: #48bb78; }
+        .accuracy-dot.good { background: #ed8936; }
+        .accuracy-dot.poor { background: #f56565; }
+        
+        .places-section {
+            margin-top: 20px;
+        }
+        
+        .places-section h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .places-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 5px;
+        }
+        
+        .place-card {
+            background: #f7fafc;
+            padding: 12px;
+            border-radius: 10px;
+            border: 2px solid #e2e8f0;
+            font-size: 0.9rem;
+        }
+        
+        .place-name {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+        
+        .place-distance {
+            color: #48bb78;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .loading.show {
+            display: flex;
+        }
+        
+        .loading-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+        }
+        
+        .loading-content i {
+            font-size: 3rem;
+            color: #4299e1;
+            margin-bottom: 15px;
+        }
+        
+        .error-message {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 10px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 10px 0;
+            display: none;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <i class="fas fa-map-marked-alt"></i>
+            Addis Ababa Live Tracker
+        </h1>
+    </div>
+    
+    <div class="status-bar" id="statusBar">
+        <i class="fas fa-satellite"></i> Initializing GPS...
+    </div>
+    
+    <div id="map"></div>
+    
+    <div class="info-panel">
+        <div class="coordinates">
+            <div class="coord-box">
+                <div class="label"><i class="fas fa-map-pin"></i> Latitude</div>
+                <div class="value" id="latitude">--</div>
+            </div>
+            <div class="coord-box">
+                <div class="label"><i class="fas fa-map-pin"></i> Longitude</div>
+                <div class="value" id="longitude">--</div>
+            </div>
+            <div class="accuracy-indicator" id="accuracyBox">
+                <div class="accuracy-dot excellent" id="accuracyDot"></div>
+                <span id="accuracyText">Waiting for GPS...</span>
+            </div>
+        </div>
+        
+        <div class="error-message" id="errorMessage"></div>
+        
+        <div class="places-section">
+            <h3>
+                <i class="fas fa-building"></i>
+                Nearby Places
+                <span style="margin-left: auto; background: #4299e1; color: white; padding: 2px 10px; border-radius: 20px; font-size: 0.8rem;" id="placesCount">0</span>
+            </h3>
+            <div class="places-grid" id="placesGrid">
+                <div style="text-align: center; color: #a0aec0; padding: 20px;">
+                    <i class="fas fa-map-pin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                    <p>Waiting for location...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="loading" id="loading">
+        <div class="loading-content">
+            <i class="fas fa-circle-notch fa-spin"></i>
+            <p id="loadingMessage">Getting your location...</p>
+        </div>
+    </div>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // ================== CONFIGURATION ==================
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwlhkF5ePRPms8ZslUbYhKaWVziWusC6RaQNy5MLbWa1vRhH2hLuDtGgHy4FPx_rT8V/exec';
+        
+        // Addis Ababa bounds
+        const ADDIS_BOUNDS = {
+            minLat: 8.5, maxLat: 10.5,
+            minLng: 38.5, maxLng: 39.5
+        };
+        
+        // ================== GLOBAL VARIABLES ==================
+        let map;
+        let userMarker = null;
+        let accuracyCircle = null;
+        let locationMarkers = [];
+        let allLocations = [];
+        let watchId = null;
+        let lastLocation = null;
+        
+        // ================== INITIALIZE MAP ==================
+        function initMap() {
+            map = L.map('map').setView([9.0308, 38.7363], 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(map);
+        }
+        
+        // ================== UPDATE UI ==================
+        function updateStatus(message, type = 'info') {
+            const statusBar = document.getElementById('statusBar');
+            statusBar.innerHTML = `<i class="fas fa-${type === 'error' ? 'exclamation-triangle' : 'satellite'}"></i> ${message}`;
+            statusBar.style.background = type === 'error' ? '#f56565' : '#4299e1';
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+            updateStatus(message, 'error');
+            setTimeout(() => errorDiv.classList.remove('show'), 5000);
+        }
+        
+        function updateAccuracyDisplay(accuracy) {
+            const dot = document.getElementById('accuracyDot');
+            const text = document.getElementById('accuracyText');
+            
+            dot.className = 'accuracy-dot';
+            
+            if (accuracy < 10) {
+                dot.classList.add('excellent');
+                text.innerHTML = `<i class="fas fa-check-circle"></i> Excellent (${accuracy.toFixed(1)}m)`;
+            } else if (accuracy < 20) {
+                dot.classList.add('good');
+                text.innerHTML = `<i class="fas fa-exclamation-circle"></i> Good (${accuracy.toFixed(1)}m)`;
+            } else if (accuracy < 50) {
+                dot.classList.add('good');
+                text.innerHTML = `<i class="fas fa-exclamation-circle"></i> Fair (${accuracy.toFixed(1)}m)`;
+            } else {
+                dot.classList.add('poor');
+                text.innerHTML = `<i class="fas fa-times-circle"></i> Poor (${accuracy.toFixed(1)}m)`;
+            }
+        }
+        
+        // ================== LOCATION TRACKING ==================
+        function startLocationTracking() {
+            if (!navigator.geolocation) {
+                showError('Geolocation is not supported by your browser');
+                return;
+            }
+            
+            document.getElementById('loading').classList.add('show');
+            updateStatus('Requesting location permission...');
+            
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 30000,
+                maximumAge: 0  // Always get fresh location
+            };
+            
+            // Clear any existing watch
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+            
+            // First get initial position
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    updateLocation(position);
+                    document.getElementById('loading').classList.remove('show');
+                    updateStatus('Location tracking active');
+                    
+                    // Then start watching for changes
+                    watchId = navigator.geolocation.watchPosition(
+                        updateLocation,
+                        handleLocationError,
+                        options
+                    );
+                },
+                function(error) {
+                    document.getElementById('loading').classList.remove('show');
+                    
+                    // If getCurrentPosition fails, try watchPosition directly
+                    watchId = navigator.geolocation.watchPosition(
+                        updateLocation,
+                        handleLocationError,
+                        options
+                    );
+                },
+                options
+            );
+        }
+        
+        function updateLocation(position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const accuracy = position.coords.accuracy;
+            const timestamp = position.timestamp;
+            
+            // Validate location is in Addis Ababa
+            if (lat < ADDIS_BOUNDS.minLat || lat > ADDIS_BOUNDS.maxLat || 
+                lng < ADDIS_BOUNDS.minLng || lng > ADDIS_BOUNDS.maxLng) {
+                console.warn('Location outside Addis Ababa:', lat, lng);
+                return;
+            }
+            
+            // Update display
+            document.getElementById('latitude').textContent = lat.toFixed(6);
+            document.getElementById('longitude').textContent = lng.toFixed(6);
+            updateAccuracyDisplay(accuracy);
+            
+            // Update map
+            if (userMarker) {
+                userMarker.setLatLng([lat, lng]);
+            } else {
+                userMarker = L.marker([lat, lng]).addTo(map)
+                    .bindPopup('You are here').openPopup();
+            }
+            
+            // Update accuracy circle
+            if (accuracyCircle) {
+                accuracyCircle.setLatLng([lat, lng]);
+                accuracyCircle.setRadius(accuracy);
+            } else {
+                accuracyCircle = L.circle([lat, lng], {
+                    color: accuracy < 20 ? '#48bb78' : accuracy < 50 ? '#ed8936' : '#f56565',
+                    fillColor: accuracy < 20 ? '#48bb78' : accuracy < 50 ? '#ed8936' : '#f56565',
+                    fillOpacity: 0.15,
+                    radius: accuracy
+                }).addTo(map);
+            }
+            
+            // Center map on first location
+            if (!lastLocation) {
+                map.setView([lat, lng], 16);
+                loadNearbyPlaces(lat, lng);
+            } else {
+                // Check if we moved significantly (more than 50 meters)
+                const distance = calculateDistance(
+                    lastLocation.lat, lastLocation.lng, lat, lng
+                ) * 1000; // Convert to meters
+                
+                if (distance > 50) {
+                    loadNearbyPlaces(lat, lng);
+                }
+            }
+            
+            lastLocation = { lat, lng, timestamp };
+        }
+        
+        function handleLocationError(error) {
+            let message = 'Location error: ';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    message += 'Please allow location access';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    message += 'GPS unavailable - check your settings';
+                    break;
+                case error.TIMEOUT:
+                    message += 'GPS timeout - move to an open area';
+                    break;
+                default:
+                    message += 'Unknown error';
+            }
+            showError(message);
+            updateStatus(message, 'error');
+        }
+        
+        // ================== LOAD NEARBY PLACES ==================
+        async function loadNearbyPlaces(lat, lng) {
+            try {
+                const response = await fetch(`${APPS_SCRIPT_URL}?action=getLocations&t=${Date.now()}`);
+                const data = await response.json();
+                
+                if (data.status === 'error') throw new Error(data.message);
+                
+                allLocations = data.locations || [];
+                
+                // Calculate distances
+                const withDistance = allLocations.map(loc => ({
+                    ...loc,
+                    distance: calculateDistance(lat, lng, loc.latitude, loc.longitude)
+                }));
+                
+                // Sort and take nearest 10
+                const nearest = withDistance
+                    .sort((a, b) => a.distance - b.distance)
+                    .slice(0, 10);
+                
+                // Update markers
+                locationMarkers.forEach(m => map.removeLayer(m));
+                locationMarkers = [];
+                
+                nearest.forEach((loc, i) => {
+                    const marker = L.marker([loc.latitude, loc.longitude]).addTo(map);
+                    marker.bindPopup(`
+                        <b>${i+1}. ${loc.siteName}</b><br>
+                        ${loc.subCity || 'Addis Ababa'}<br>
+                        ${loc.distance.toFixed(2)} km away
+                    `);
+                    locationMarkers.push(marker);
+                });
+                
+                // Update grid
+                const grid = document.getElementById('placesGrid');
+                if (nearest.length > 0) {
+                    grid.innerHTML = nearest.map((loc, i) => `
+                        <div class="place-card">
+                            <div class="place-name">${i+1}. ${loc.siteName}</div>
+                            <div class="place-distance">${loc.distance.toFixed(2)} km</div>
+                            <div style="color: #718096; font-size: 0.8rem;">${loc.subCity || 'Addis Ababa'}</div>
+                        </div>
+                    `).join('');
+                }
+                
+                document.getElementById('placesCount').textContent = nearest.length;
+                
+            } catch (error) {
+                console.error('Error loading places:', error);
+            }
+        }
+        
+        // ================== DISTANCE CALCULATION ==================
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        // ================== INITIALIZE ==================
+        window.onload = function() {
+            initMap();
+            
+            // Check if we're on HTTPS (required for geolocation)
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                showError('Geolocation requires HTTPS. Please use HTTPS connection.');
+                return;
+            }
+            
+            // Start tracking automatically
+            startLocationTracking();
+            
+            // Check permission status
+            if (navigator.permissions && navigator.permissions.query) {
+                navigator.permissions.query({ name: 'geolocation' }).then(result => {
+                    if (result.state === 'denied') {
+                        showError('Location permission denied. Please enable in browser settings.');
+                    }
+                });
+            }
+        };
+        
+        // Clean up on page unload
+        window.onbeforeunload = function() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+        };
+    </script>
+</body>
+</html>
